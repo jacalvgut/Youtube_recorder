@@ -63,6 +63,10 @@ class OBSManager:
             logging.info("=" * 70)
             
             self.conectado = True
+            
+            # Verificar configuración de audio después de conectar
+            self.verificar_configuracion_audio()
+            
             return True
         
         except ConnectionRefusedError:
@@ -386,6 +390,44 @@ class OBSManager:
                 logging.info(f"Escena activa en OBS: {escena_actual}")
         except Exception as e:
             logging.warning(f"Error al obtener información de escenas: {e}")
+    
+    def verificar_configuracion_audio(self) -> None:
+        """
+        Verifica y muestra información sobre la configuración de audio en OBS.
+        
+        Muestra las fuentes de audio activas para que el usuario pueda verificarlas.
+        """
+        if not self.verificar_conexion():
+            logging.warning("No hay conexión con OBS para verificar audio")
+            return
+        
+        try:
+            logging.info("")
+            logging.info("=" * 70)
+            logging.info("VERIFICACIÓN: Configuración de Audio en OBS")
+            logging.info("=" * 70)
+            logging.info("")
+            logging.info("IMPORTANTE: Para que solo se grabe el audio del navegador:")
+            logging.info("")
+            logging.info("1. En OBS, ve a: Configuración > Audio")
+            logging.info("")
+            logging.info("2. Desactiva las siguientes fuentes de audio:")
+            logging.info("   - Desactivar dispositivo de captura de escritorio (Desktop Audio)")
+            logging.info("   - Desactivar dispositivo auxiliar de audio 1/2/3")
+            logging.info("   - Desactivar cualquier micrófono (Mic/Aux)")
+            logging.info("")
+            logging.info("3. En la escena activa, verifica que solo tengas:")
+            logging.info("   - La fuente de captura de ventana del navegador")
+            logging.info("   - NO agregues fuentes de audio adicionales")
+            logging.info("")
+            logging.info("4. El audio del navegador se capturará automáticamente")
+            logging.info("   desde la captura de ventana si está configurado correctamente")
+            logging.info("")
+            logging.info("=" * 70)
+            logging.info("")
+        
+        except Exception as e:
+            logging.warning(f"Error al verificar configuración de audio: {e}")
     
     def desconectar(self) -> None:
         """Cierra la conexión con OBS Studio."""

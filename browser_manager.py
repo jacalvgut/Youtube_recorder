@@ -700,10 +700,11 @@ class BrowserManager:
     
     def configurar_pantalla_completa(self) -> bool:
         """
-        Configura la ventana del navegador en pantalla completa SIN traerla al frente.
+        Configura el video en pantalla completa usando el reproductor de YouTube.
         
-        Usa métodos que NO cambian el foco ni pausan el video.
-        OBS ya tiene la ventana seleccionada para grabar, no necesitamos traerla al frente.
+        Espera a que el reproductor esté completamente inicializado y el video
+        esté reproduciéndose antes de activar pantalla completa.
+        Solo activa pantalla completa UNA VEZ sin alternar entre modos.
         
         Returns:
             bool: True si se configuró correctamente, False en caso contrario.
@@ -713,36 +714,223 @@ class BrowserManager:
             return False
         
         try:
-            # NO cambiar el foco - solo maximizar usando métodos que no interfieren
-            # Método 1: Maximizar usando Selenium (no cambia foco agresivamente)
+            # Maximizar la ventana primero
             try:
                 self.driver.maximize_window()
-                logging.info("✓ Ventana maximizada")
-                time.sleep(0.2)
-            except Exception as e:
-                logging.warning(f"No se pudo maximizar la ventana: {e}")
-            
-            # Método 2: Intentar pantalla completa con JavaScript (sin cambiar foco)
-            try:
-                self.driver.execute_script("""
-                    try {
-                        if (document.documentElement.requestFullscreen) {
-                            document.documentElement.requestFullscreen();
-                        } else if (document.documentElement.webkitRequestFullscreen) {
-                            document.documentElement.webkitRequestFullscreen();
-                        }
-                    } catch(e) {
-                        // Silencioso - no hacer nada si falla
-                    }
-                """)
+                time.sleep(0.3)
             except:
                 pass
             
-            return True
+            # Esperar a que el reproductor esté completamente cargado e inicializado
+            wait = WebDriverWait(self.driver, 20)
+            
+            logging.info("Esperando a que el reproductor esté completamente listo...")
+            
+            # Esperar a que el reproductor de video esté presente
+            try:
+                wait.until(EC.presence_of_element_located((By.CLASS_NAME, "html5-video-player")))
+                logging.info("✓ Reproductor HTML5 detectado")
+            except:
+                logging.warning("Reproductor HTML5 no detectado, continuando de todas formas...")
+            
+            # Esperar a que el reproductor de YouTube (#movie_player) esté presente
+            try:
+                wait.until(EC.presence_of_element_located((By.ID, "movie_player")))
+                logging.info("✓ Reproductor de YouTube detectado")
+            except:
+                logging.warning("Reproductor de YouTube no detectado, continuando de todas formas...")
+            
+            # Esperar a que el video esté cargado y listo
+            video_listo = False
+            for intento in range(10):
+                try:
+                    estado_video = self.driver.execute_script("""
+                        var video = document.querySelector('video');
+                        if (video) {
+                            return {
+                                ready: video.readyState >= 2, // HAVE_CURRENT_DATA o superior
+                                hasDuration: video.duration > 0,
+                                playerReady: document.querySelector('#movie_player') !== null
+                            };
+                        }
+                        return {ready: false, hasDuration: false, playerReady: false};
+                    """)
+                    
+                    if estado_video.get('ready') and estado_video.get('playerReady'):
+                        video_listo = True
+                        logging.info("✓ Video listo para pantalla completa")
+                        break
+                except:
+                    pass
+                
+                if intento < 9:
+                    time.sleep(0.5)
+            
+            # Esperar un poco más para asegurar que todo esté completamente inicializado
+            time.sleep(1)
+            
+            # PRIMERO: Verificar si YA está en pantalla completa
+            ya_en_fullscreen = self.driver.execute_script("""
+                return !!(document.fullscreenElement || 
+                         document.webkitFullscreenElement || 
+                         document.mozFullScreenElement || 
+                         document.msFullscreenElement);
+            """)
+            
+            if ya_en_fullscreen:
+                logging.info("✓ El video ya está en pantalla completa")
+                return True
+            
+            # Si NO está en pantalla completa, activarla UNA SOLA VEZ
+            logging.info("Activando pantalla completa...")
+            
+            # Intentar múltiples veces (sin alternar) hasta que funcione
+            for intento in range(5):
+                try:
+                    # Método directo: usar la API de pantalla completa del reproductor de YouTube
+                    resultado = self.driver.execute_script("""
+                        // Obtener el reproductor de YouTube
+                        var player = document.querySelector('#movie_player');
+                        if (!player) {
+                            return {success: false, reason: 'no_player'};
+                        }
+                        
+                        // Verificar que no esté ya en pantalla completa
+                        var isFullscreen = !!(document.fullscreenElement || 
+                                             document.webkitFullscreenElement || 
+                                             document.mozFullScreenElement || 
+                                             document.msFullscreenElement);
+                        
+                        if (isFullscreen) {
+                            return {success: true, reason: 'already_fullscreen'};
+                        }
+                        
+                        // Activar pantalla completa directamente en el reproductor
+                        // Esto activa pantalla completa REAL, no modo cine
+                        var fullscreenFunc = player.requestFullscreen || 
+                                             player.webkitRequestFullscreen || 
+                                             player.webkitEnterFullscreen ||
+                                             player.mozRequestFullScreen || 
+                                             player.msRequestFullscreen;
+                        
+                        if (fullscreenFunc) {
+                            try {
+                                fullscreenFunc.call(player).catch(function(err) {
+                                    console.log('Error al activar fullscreen:', err);
+                                });
+                                return {success: true, reason: 'fullscreen_called'};
+                            } catch(e) {
+                                return {success: false, reason: 'call_error: ' + e.message};
+                            }
+                        }
+                        
+                        return {success: false, reason: 'no_fullscreen_method'};
+                    """)
+                    
+                    if resultado.get('success'):
+                        # Esperar a que se active
+                        time.sleep(1.5)
+                        
+                        # Verificar que realmente entró en pantalla completa
+                        en_fullscreen = self.driver.execute_script("""
+                            return !!(document.fullscreenElement || 
+                                     document.webkitFullscreenElement || 
+                                     document.mozFullScreenElement || 
+                                     document.msFullscreenElement);
+                        """)
+                        
+                        if en_fullscreen:
+                            logging.info(f"✓ Pantalla completa activada correctamente (intento {intento + 1})")
+                            return True
+                        else:
+                            logging.info(f"Pantalla completa no activada aún (intento {intento + 1}/5), esperando más...")
+                            time.sleep(1)
+                    else:
+                        logging.debug(f"Intento {intento + 1}: {resultado.get('reason', 'unknown')}")
+                        if intento < 4:
+                            time.sleep(1)
+                
+                except Exception as e:
+                    logging.debug(f"Error en intento {intento + 1}: {e}")
+                    if intento < 4:
+                        time.sleep(1)
+            
+            # Método alternativo: usar la API del documento (solo si el anterior falló completamente)
+            try:
+                logging.info("Intentando método alternativo: pantalla completa del documento...")
+                self.driver.execute_script("""
+                    var docElm = document.documentElement;
+                    if (docElm.requestFullscreen) {
+                        docElm.requestFullscreen();
+                    } else if (docElm.webkitRequestFullscreen) {
+                        docElm.webkitRequestFullscreen();
+                    } else if (docElm.mozRequestFullScreen) {
+                        docElm.mozRequestFullScreen();
+                    } else if (docElm.msRequestFullscreen) {
+                        docElm.msRequestFullscreen();
+                    }
+                """)
+                time.sleep(1.5)
+                
+                # Verificar
+                en_fullscreen = self.driver.execute_script("""
+                    return !!(document.fullscreenElement || 
+                             document.webkitFullscreenElement || 
+                             document.mozFullScreenElement || 
+                             document.msFullscreenElement);
+                """)
+                
+                if en_fullscreen:
+                    logging.info("✓ Pantalla completa activada con método alternativo")
+                    return True
+                    
+            except Exception as e:
+                logging.debug(f"Error con método alternativo: {e}")
+            
+            logging.warning("No se pudo activar pantalla completa después de todos los intentos")
+            return False
         
         except Exception as e:
             logging.error(f"ERROR al configurar pantalla completa: {e}")
+            import traceback
+            logging.debug(f"Traceback: {traceback.format_exc()}")
             return False
+    
+    def salir_pantalla_completa(self) -> None:
+        """
+        Sale de pantalla completa antes de cerrar la pestaña.
+        
+        Asegura que el navegador no quede en pantalla completa al cambiar de video.
+        """
+        if not self.driver:
+            return
+        
+        try:
+            # Verificar si está en pantalla completa
+            en_fullscreen = self.driver.execute_script("""
+                return !!(document.fullscreenElement || 
+                         document.webkitFullscreenElement || 
+                         document.mozFullScreenElement || 
+                         document.msFullscreenElement);
+            """)
+            
+            if en_fullscreen:
+                # Salir de pantalla completa
+                self.driver.execute_script("""
+                    if (document.exitFullscreen) {
+                        document.exitFullscreen();
+                    } else if (document.webkitExitFullscreen) {
+                        document.webkitExitFullscreen();
+                    } else if (document.mozCancelFullScreen) {
+                        document.mozCancelFullScreen();
+                    } else if (document.msExitFullscreen) {
+                        document.msExitFullscreen();
+                    }
+                """)
+                time.sleep(0.3)
+                logging.debug("Salido de pantalla completa")
+        except:
+            pass  # Si falla, no es crítico
     
     def reproducir_video(self) -> bool:
         """

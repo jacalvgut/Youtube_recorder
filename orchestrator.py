@@ -284,21 +284,23 @@ class Orchestrator:
                     self.obs_manager.detener_grabacion()
                     continue
                 
-                # PASO 4: Configurar pantalla completa (sin traer al frente, sin pausar)
+                # PASO 4: Reproducir el video primero (para que el reproductor esté listo)
                 logging.info("")
                 logging.info("=" * 70)
-                logging.info("PASO 4: CONFIGURANDO PANTALLA COMPLETA")
-                logging.info("=" * 70)
-                if not self.browser_manager.configurar_pantalla_completa():
-                    logging.warning("No se pudo configurar pantalla completa. Continuando de todas formas...")
-                
-                # PASO 5: Reproducir el video
-                logging.info("")
-                logging.info("=" * 70)
-                logging.info("PASO 5: REPRODUCIENDO VIDEO")
+                logging.info("PASO 4: REPRODUCIENDO VIDEO")
                 logging.info("=" * 70)
                 if not self.browser_manager.reproducir_video():
                     logging.warning("No se pudo reproducir el video. Continuando de todas formas...")
+                
+                # PASO 5: Configurar pantalla completa (después de que el reproductor esté listo)
+                logging.info("")
+                logging.info("=" * 70)
+                logging.info("PASO 5: CONFIGURANDO PANTALLA COMPLETA")
+                logging.info("=" * 70)
+                # Esperar un momento para que el reproductor esté completamente cargado
+                time.sleep(1)
+                if not self.browser_manager.configurar_pantalla_completa():
+                    logging.warning("No se pudo configurar pantalla completa. Continuando de todas formas...")
                 
                 # PASO 6: Obtener información del video MIENTRAS ya está grabando
                 # La obtención de duración será continua hasta que se detecte
@@ -373,6 +375,9 @@ class Orchestrator:
                 
                 # Asegurar que no hay grabación activa
                 self.obs_manager.asegurar_grabacion_detenida()
+                
+                # Salir de pantalla completa antes de cerrar la pestaña
+                self.browser_manager.salir_pantalla_completa()
                 
                 # Cerrar pestaña actual si no es la última
                 if i < len(urls):
