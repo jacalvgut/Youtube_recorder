@@ -1,0 +1,14 @@
+# Dependencias para el Sistema de Grabación de Videos de YouTube
+
+# Selenium para automatización del navegador
+selenium>=4.0.0
+
+# WebDriver Manager para gestionar drivers automáticamente
+webdriver-manager>=3.8.0
+
+# OBS WebSocket para controlar OBS Studio
+obsws-python>=1.2.0
+
+# PyWin32 para control de ventanas en Windows (solo Windows)
+pywin32>=300; sys_platform == "win32"
+

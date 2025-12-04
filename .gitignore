@@ -1,0 +1,57 @@
+# Archivos de video - Ignorar todos los videos grabados
+*.mp4
+*.avi
+*.mkv
+*.mov
+*.wmv
+*.flv
+*.webm
+*.m4v
+*.3gp
+*.ogv
+
+# Carpetas de módulos - Ignorar el contenido pero mantener la estructura
+# Las carpetas se crearán pero su contenido será ignorado
+MOD*/**/*
+!MOD*/.gitkeep
+
+# Cache de Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Entornos virtuales
+venv/
+env/
+ENV/
+.venv
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Archivos de sistema
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+
+# Archivos temporales
+*.tmp
+*.temp
+~*
+
+# OBS - archivos temporales de grabación
+*.tmp.mp4
+
+# Mantener las carpetas de módulos pero ignorar su contenido
+# Si quieres subir una carpeta específica, puedes usar: git add -f MODXX_nombre/
+# O crear un .gitkeep dentro de cada carpeta que quieras rastrear
+
