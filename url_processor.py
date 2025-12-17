@@ -10,8 +10,10 @@ Este módulo se encarga de:
 
 import logging
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 import config
+from url_validator import validar_url_youtube
+from url_filters import aplicar_modulo_inicio, aplicar_limites_prueba, aplicar_inicio_video
 
 
 class URLProcessor:
@@ -36,17 +38,8 @@ class URLProcessor:
         """
         Lee el archivo de texto y lo convierte en un diccionario de módulos y URLs.
         
-        Formato esperado:
-            #MODXX_xxxx_xxxx
-            https://www.youtube.com/watch?v=...
-            https://www.youtube.com/watch?v=...
-        
         Returns:
             Dict con el formato {nombre_modulo: [lista_de_urls]}, o None si hay error.
-        
-        Raises:
-            FileNotFoundError: Si el archivo no existe.
-            IOError: Si hay un error al leer el archivo.
         """
         logging.info("=" * 70)
         logging.info("VERIFICACIÓN: Leyendo archivo de URLs...")
@@ -81,7 +74,6 @@ class URLProcessor:
                     
                     # Detectar inicio de módulo (línea que empieza con #)
                     if linea.startswith('#'):
-                        # Eliminar el '#' y espacios al principio
                         modulo_actual = linea.lstrip('# ').strip()
                         if modulo_actual:
                             modulos[modulo_actual] = []
@@ -92,8 +84,7 @@ class URLProcessor:
                     
                     # Detectar URL (línea que empieza con http)
                     elif modulo_actual and linea.startswith('http'):
-                        # Validar que sea una URL válida de YouTube
-                        if self._validar_url_youtube(linea):
+                        if validar_url_youtube(linea):
                             modulos[modulo_actual].append(linea)
                             urls_encontradas += 1
                         else:
@@ -136,37 +127,15 @@ class URLProcessor:
             logging.error(f"Traceback: {traceback.format_exc()}")
             return None
     
-    def _validar_url_youtube(self, url: str) -> bool:
-        """
-        Valida que una URL sea válida para YouTube.
-        
-        Args:
-            url: La URL a validar.
-        
-        Returns:
-            bool: True si la URL es válida, False en caso contrario.
-        """
-        if not url or not isinstance(url, str):
-            return False
-        
-        # Verificar que sea una URL de YouTube
-        youtube_domains = ['youtube.com', 'youtu.be', 'www.youtube.com']
-        return any(domain in url.lower() for domain in youtube_domains)
-    
     def crear_estructura_carpetas(self, directorio_base: Path = None) -> Dict[str, Path]:
         """
         Crea las carpetas para cada módulo en el directorio especificado.
         
         Args:
-            directorio_base: Directorio base donde crear las carpetas. 
-                           Si es None, usa el directorio actual.
+            directorio_base: Directorio base donde crear las carpetas.
         
         Returns:
             Dict con el formato {nombre_modulo: ruta_carpeta_creada}
-        
-        Raises:
-            PermissionError: Si no se tienen permisos para crear carpetas.
-            OSError: Si hay un error al crear las carpetas.
         """
         if not self.modulos:
             logging.error("ERROR: No hay módulos procesados. Ejecuta parsear_archivo_urls() primero.")
@@ -241,30 +210,19 @@ class URLProcessor:
         """
         return self.modulos.copy()
     
+    def aplicar_modulo_inicio(self) -> None:
+        """Filtra los módulos para empezar desde un módulo específico."""
+        self.modulos = aplicar_modulo_inicio(self.modulos)
+    
     def aplicar_limites_prueba(self) -> None:
+        """Aplica los límites configurados para el modo de prueba."""
+        self.modulos = aplicar_limites_prueba(self.modulos)
+    
+    def aplicar_inicio_video(self) -> Dict[str, int]:
         """
-        Aplica los límites configurados para el modo de prueba.
+        Aplica la configuración de inicio de video para continuar desde un índice específico.
         
-        Modifica internamente el diccionario de módulos según las configuraciones
-        de MAX_MODULOS_PRUEBA y MAX_VIDEOS_POR_MODULO_PRUEBA.
+        Returns:
+            Dict con el formato {nombre_modulo: indice_inicio} para usar en la numeración de archivos.
         """
-        if not config.MODO_PRUEBA:
-            return
-        
-        if config.MAX_MODULOS_PRUEBA:
-            modulos_lista = list(self.modulos.items())
-            modulos_limitados = dict(modulos_lista[:config.MAX_MODULOS_PRUEBA])
-            modulos_omitidos = len(self.modulos) - len(modulos_limitados)
-            
-            if modulos_omitidos > 0:
-                logging.info(f"Modo prueba: Procesando solo {len(modulos_limitados)} de {len(self.modulos)} módulos")
-            
-            self.modulos = modulos_limitados
-        
-        if config.MAX_VIDEOS_POR_MODULO_PRUEBA:
-            for modulo, urls in self.modulos.items():
-                if len(urls) > config.MAX_VIDEOS_POR_MODULO_PRUEBA:
-                    urls_limitadas = urls[:config.MAX_VIDEOS_POR_MODULO_PRUEBA]
-                    logging.info(f"Modo prueba: Limitando '{modulo}' a {len(urls_limitadas)} de {len(urls)} videos")
-                    self.modulos[modulo] = urls_limitadas
-
+        return aplicar_inicio_video(self.modulos)
